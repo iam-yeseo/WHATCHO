@@ -65,7 +65,10 @@ function useSignalProgress(
 }
 
 export default function App() {
-  const mock = new URLSearchParams(location.search).get('mock') === 'true';
+  const [mock, setMock] = useState(() => (
+    new URLSearchParams(location.search).get('mock') === 'true' ||
+    localStorage.testMode === 'true'
+  ));
   const { position, state: gps } = usePosition(mock);
   const [intersections, setIntersections] = useState<Intersection[]>(mock ? mockIntersections : []);
   const [rawSignal, setSignal] = useState<ApiSignalResponse | null>(mock ? mockSignal() : null);
@@ -80,6 +83,26 @@ export default function App() {
     ok: boolean;
   } | null>(null);
   const signalRequest = useRef<{ key: string; controller: AbortController } | null>(null);
+
+  const toggleTestMode = () => {
+    const next = !mock;
+    const url = new URL(location.href);
+    if (next) url.searchParams.set('mock', 'true');
+    else url.searchParams.delete('mock');
+    history.replaceState(null, '', url);
+    localStorage.testMode = String(next);
+    setMock(next);
+  };
+
+  useEffect(() => {
+    signalRequest.current?.controller.abort();
+    signalRequest.current = null;
+    lastIntersectionQuery.current = null;
+    setManualIntersectionId(null);
+    setIntersections(mock ? mockIntersections : []);
+    setSignal(mock ? mockSignal() : null);
+    setApi(mock ? 'ok' : navigator.onLine ? 'idle' : 'offline');
+  }, [mock]);
 
   const automaticSelected = useMemo(
     () => position ? selectNextIntersection(position, intersections) : null,
@@ -237,10 +260,12 @@ export default function App() {
     return () => clearTimeout(id);
   }, [mock, selected?.id]);
 
-  const gpsLabel = gps === 'active' ? 'GPS 정상'
+  const gpsLabel = mock ? 'TEST GPS'
+    : gps === 'active' ? 'GPS 정상'
     : gps === 'denied' ? 'GPS 권한 거부'
       : gps === 'requesting' ? 'GPS 요청 중' : 'GPS 확인 불가';
-  const apiLabel = api === 'ok' ? 'C-ITS 연결'
+  const apiLabel = mock ? 'DEMO DATA'
+    : api === 'ok' ? 'C-ITS 연결'
     : api === 'loading' ? '동기화 중'
       : api === 'offline' ? '오프라인'
         : api === 'error' ? 'API 오류' : '연결 대기';
@@ -251,7 +276,16 @@ export default function App() {
       <div className={`pill ${api === 'ok' ? 'good' : 'warn'}`}><i />{apiLabel}</div>
     </header>
 
-    {mock && <div className="mock">MOCK MODE</div>}
+    <button
+      type="button"
+      className={`test-mode ${mock ? 'active' : ''}`}
+      aria-pressed={mock}
+      onClick={toggleTestMode}
+    >
+      <span><b>TEST MODE</b><small>GPS·API 없이 데모 데이터 사용</small></span>
+      <em>{mock ? 'ON' : 'OFF'}</em>
+      <i aria-hidden="true"><b /></i>
+    </button>
 
     <section className="intersection">
       <span>선택 교차로</span>
@@ -329,6 +363,7 @@ export default function App() {
       position,
       selected,
       nearby,
+      testMode: mock,
       api,
       endpoint: '/api',
       parsedSignal: activeRawSignal,

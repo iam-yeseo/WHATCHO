@@ -30,7 +30,7 @@ cp .dev.vars.example .dev.vars
 npm run dev:worker
 ```
 
-UI만 빠르게 확인하려면 `npm run dev`를 사용하고 `?mock=true`로 접속합니다.
+UI만 빠르게 확인하려면 `npm run dev`를 사용하고 화면 상단의 **TEST MODE** 스위치를 켭니다. `?mock=true`로 바로 시작할 수도 있습니다.
 
 ```bash
 npm run dev
@@ -66,7 +66,8 @@ npm run deploy
 - 신호는 거리 500m 이내 10초, 그 밖에는 15초마다 재동기화하며 화면 숫자와 프로그레스바는 0.1초 단위로 함께 감소합니다.
 - 주변 신호지원 교차로를 최대 4개까지 표시하며 원하는 교차로를 눌러 신호를 직접 확인할 수 있습니다.
 - GLOSA는 교차로 35~800m 구간에서 직진 신호 잔여시간과 거리를 사용합니다. 권장값은 5km/h 단위, 최대 50km/h로 제한하며 황색·오래된 데이터·무리한 가속이 필요한 상황에는 속도를 제시하지 않습니다.
-- `?mock=true`로 접속하면 GPS/API 호출 없이 삼성역사거리 시나리오를 실행합니다.
+- 화면 상단 **TEST MODE**를 켜면 현재 위치 권한이나 실제 API 없이 삼성역사거리 데모 시나리오를 실행합니다. 선택은 브라우저에 저장되며 다시 열어도 유지됩니다.
+- `?mock=true`로 접속하면 TEST MODE가 켜진 상태로 바로 시작하고, 화면 스위치로 다시 실시간 모드로 전환할 수 있습니다.
 - 하단 **설정**을 누르면 Developer Mode가 켜집니다. 좌표, 선택 교차로, 거리, bearing, 파싱 데이터와 API 상태를 표시하지만 키는 표시하지 않습니다.
 
 ## 현재 구현 범위
@@ -77,7 +78,7 @@ npm run deploy
 - GPS 권한/오류/오프라인/API 오류/빈 교차로/heading 없음/stale 표시
 - Haversine 거리, bearing, 전방 ±45° 후보 및 nearest fallback
 - Cloudflare 서버 프록시, 입력 검증, 요청별 timeout, rate-limit/auth 오류 정규화, no-store
-- Mock Mode, 로컬 카운트다운, visibility/network 재동기화, Developer Mode, PWA manifest
+- 런타임 TEST MODE 전환·상태 저장, 로컬 카운트다운, visibility/network 재동기화, Developer Mode, PWA manifest
 
 ## 알려진 한계
 
