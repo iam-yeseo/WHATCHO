@@ -1,7 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { normalizeIntersection } from './intersections';
 import { parseSignal } from './signals';
-import { extractRows, extractTotalCount } from './_utils';
+import { extractRows, extractTotalCount, fetchTData } from './_utils';
+
+afterEach(() => vi.unstubAllGlobals());
 
 describe('T-DATA adapters', () => {
   it('unwraps the standard response envelope', () => {
@@ -60,5 +62,24 @@ describe('T-DATA adapters', () => {
   it('does not guess a signal direction when heading is unknown', () => {
     const signal = parseSignal({ items: [{ itstId: '1537', ntStsgRmdrCs: 50 }] }, '1537', 'UNKNOWN');
     expect(signal?.signal.straight).toEqual({ state: 'UNKNOWN', remainingSeconds: null });
+  });
+
+  it('maps T-DATA unknown-client 404 responses to an auth failure without exposing the key', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(
+      JSON.stringify({ responseCode: 404 }),
+      {
+        status: 404,
+        headers: { 'x-gateway-error': 'No client found for API Key hidden-value' },
+      },
+    )));
+
+    await expect(fetchTData(
+      new URL('https://t-data.example.test/service'),
+      'hidden-value',
+      'DATA_UNAVAILABLE',
+    )).rejects.toMatchObject({
+      code: 'UPSTREAM_AUTH_FAILED',
+      details: { upstreamStatus: 404 },
+    });
   });
 });
