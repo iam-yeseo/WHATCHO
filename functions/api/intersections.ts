@@ -7,6 +7,7 @@ import {
   fetchTData,
   isObject,
   json,
+  UpstreamError,
   upstreamFailure,
   type JsonObject,
 } from './_utils';
@@ -15,6 +16,8 @@ const PAGE_SIZE = 1000;
 const MAX_PAGES = 5;
 const CATALOG_CACHE_SECONDS = 60 * 60;
 const CATALOG_CACHE_KEY = new Request('https://cache.whatcho.internal/tdata/intersections-v2');
+const SIGNAL_INDEX_CACHE_SECONDS = 60;
+const SIGNAL_INDEX_CACHE_KEY = new Request('https://cache.whatcho.internal/tdata/signal-intersections-v1');
 
 export function normalizeIntersection(row: JsonObject): Intersection | null {
   const id = String(row.intersectionId ?? row.itstId ?? row.id ?? '').trim();
@@ -77,6 +80,54 @@ async function intersectionCatalog(env: Env, ctx: ExecutionContext) {
   return catalog;
 }
 
+export function extractSignalIntersectionIds(raw: unknown) {
+  return new Set(
+    extractRows(raw)
+      .map((row) => String(row.itstId ?? row.intersectionId ?? '').trim())
+      .filter(Boolean),
+  );
+}
+
+const readCachedSignalIds = async (response: Response): Promise<Set<string> | null> => {
+  const raw: unknown = await response.json();
+  if (!isObject(raw) || !Array.isArray(raw.ids)) return null;
+  const ids = raw.ids.map(String).filter(Boolean);
+  return ids.length ? new Set(ids) : null;
+};
+
+async function fetchSignalIntersectionIds(env: Env) {
+  const url = new URL(env.TDATA_SIGNAL_API_URL);
+  url.searchParams.set('pageNo', '1');
+  url.searchParams.set('numOfRows', String(PAGE_SIZE));
+  const raw = await fetchTData(
+    url,
+    env.TDATA_API_KEY,
+    'SIGNAL_DATA_UNAVAILABLE',
+    12_000,
+  );
+  const ids = extractSignalIntersectionIds(raw);
+  if (!ids.size) throw new UpstreamError('SIGNAL_DATA_UNAVAILABLE', 502);
+  return ids;
+}
+
+async function signalIntersectionIds(env: Env, ctx: ExecutionContext) {
+  const cache = await caches.open('whatcho-signal-intersections');
+  const cached = await cache.match(SIGNAL_INDEX_CACHE_KEY);
+  if (cached) {
+    const ids = await readCachedSignalIds(cached);
+    if (ids) return ids;
+  }
+
+  const ids = await fetchSignalIntersectionIds(env);
+  const response = json(
+    { ids: [...ids] },
+    200,
+    { 'cache-control': `public, max-age=${SIGNAL_INDEX_CACHE_SECONDS}` },
+  );
+  ctx.waitUntil(cache.put(SIGNAL_INDEX_CACHE_KEY, response));
+  return ids;
+}
+
 export async function handleIntersections(
   request: Request,
   env: Env,
@@ -95,8 +146,12 @@ export async function handleIntersections(
   }
 
   try {
-    const catalog = await intersectionCatalog(env, ctx);
+    const [catalog, signalIds] = await Promise.all([
+      intersectionCatalog(env, ctx),
+      signalIntersectionIds(env, ctx),
+    ]);
     const intersections = catalog
+      .filter((intersection) => signalIds.has(intersection.id))
       .map((intersection) => ({
         ...intersection,
         distanceMeters: distanceMeters({ latitude, longitude }, intersection),

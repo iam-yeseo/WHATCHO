@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { normalizeIntersection } from './intersections';
+import { extractSignalIntersectionIds, normalizeIntersection } from './intersections';
 import { parseSignal } from './signals';
 import { extractRows, extractTotalCount, fetchTData } from './_utils';
 
@@ -34,6 +34,16 @@ describe('T-DATA adapters', () => {
       latitude: 37.968756,
       longitude: 127.547359,
     });
+  });
+
+  it('extracts only signal-enabled intersection IDs from the live index', () => {
+    expect([...extractSignalIntersectionIds({
+      response: {
+        body: {
+          items: { item: [{ itstId: '1537' }, { itstId: '77' }, { itstId: '' }] },
+        },
+      },
+    })]).toEqual(['1537', '77']);
   });
 
   it('selects the requested approach and converts tenths of a second', () => {
