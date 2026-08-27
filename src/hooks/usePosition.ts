@@ -1,0 +1,6 @@
+import { useEffect, useRef, useState } from 'react';
+import { bearing, distanceMeters } from '../lib/geo';
+import type { UserPosition } from '../types';
+export type GpsState='requesting'|'active'|'denied'|'unavailable';
+export function usePosition(mock:boolean){const[state,setState]=useState<GpsState>(mock?'active':'requesting');const[position,setPosition]=useState<UserPosition|null>(mock?{latitude:37.5087,longitude:127.0628,accuracy:4,speed:11.1,heading:82,timestamp:Date.now()}:null);const previous=useRef<UserPosition|null>(null);
+useEffect(()=>{if(mock)return;if(!navigator.geolocation){setState('unavailable');return}const id=navigator.geolocation.watchPosition(({coords,timestamp})=>{const next={latitude:coords.latitude,longitude:coords.longitude,accuracy:coords.accuracy,speed:coords.speed,heading:coords.heading,timestamp};if(next.heading==null&&previous.current&&distanceMeters(previous.current,next)>5)next.heading=bearing(previous.current,next);previous.current=next;setPosition(next);setState('active')},e=>setState(e.code===e.PERMISSION_DENIED?'denied':'unavailable'),{enableHighAccuracy:true,maximumAge:2000,timeout:12000});return()=>navigator.geolocation.clearWatch(id)},[mock]);return{position,state};}

@@ -1,0 +1,1 @@
+import{json,type Env}from'./_utils';export const onRequestGet:PagesFunction<Env>=async({env})=>json({ok:true,configured:Boolean(env.TDATA_API_KEY&&env.TDATA_SIGNAL_API_URL&&env.TDATA_INTERSECTION_API_URL),timestamp:new Date().toISOString()});
