@@ -42,7 +42,8 @@ npm run dev
 1. Worker 프로젝트 이름은 `whatcho`, Build command는 `npm run build`, Deploy command는 `npm run deploy:cloudflare`를 사용합니다.
 2. Cloudflare Builds의 **Variables and secrets**에서 `TDATA_API_KEY`를 Secret으로 등록합니다. 배포 스크립트가 이 값을 로그에 출력하지 않고 Worker Runtime Secret으로 함께 업로드하며, 임시 파일은 즉시 삭제합니다.
 3. 신호 잔여시간·교차로 MAP 공식 URL은 비밀값이 아니므로 `wrangler.jsonc`의 `vars`에서 관리합니다.
-4. 배포 후 `/api/status`에서 `configured: true`를 확인합니다. 이 응답은 키 값 자체를 반환하지 않습니다.
+4. `whatcho.yeseo.im`은 `wrangler.jsonc`의 Custom Domain으로 관리하며 Cloudflare가 DNS와 인증서를 생성합니다.
+5. 배포 후 `/api/status`에서 `configured: true`를 확인합니다. 이 응답은 키 값 자체를 반환하지 않습니다.
 
 CLI에서는 API 키를 명령행 인자로 남기지 말고 다음 대화형 명령으로 입력합니다.
 

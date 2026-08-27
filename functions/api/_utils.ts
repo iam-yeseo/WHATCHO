@@ -4,6 +4,7 @@ export class UpstreamError extends Error {
   constructor(
     readonly code: string,
     readonly status: number,
+    readonly details: { upstreamStatus?: number; serviceCode?: string } = {},
   ) {
     super(code);
   }
@@ -101,12 +102,20 @@ export async function fetchTData(
       signal: controller.signal,
     });
     if (response.status === 401 || response.status === 403) {
-      throw new UpstreamError('UPSTREAM_AUTH_FAILED', 502);
+      throw new UpstreamError('UPSTREAM_AUTH_FAILED', 502, {
+        upstreamStatus: response.status,
+      });
     }
     if (response.status === 429) {
-      throw new UpstreamError('UPSTREAM_RATE_LIMITED', 503);
+      throw new UpstreamError('UPSTREAM_RATE_LIMITED', 503, {
+        upstreamStatus: response.status,
+      });
     }
-    if (!response.ok) throw new UpstreamError(fallbackCode, 502);
+    if (!response.ok) {
+      throw new UpstreamError(fallbackCode, 502, {
+        upstreamStatus: response.status,
+      });
+    }
 
     let raw: unknown;
     try {
@@ -118,7 +127,9 @@ export async function fetchTData(
     const serviceError = envelopeError(raw);
     if (serviceError) {
       const authError = /AUTH|KEY|인증/i.test(`${serviceError.code} ${serviceError.message}`);
-      throw new UpstreamError(authError ? 'UPSTREAM_AUTH_FAILED' : fallbackCode, 502);
+      throw new UpstreamError(authError ? 'UPSTREAM_AUTH_FAILED' : fallbackCode, 502, {
+        serviceCode: serviceError.code,
+      });
     }
     return raw;
   } catch (caught) {
@@ -136,6 +147,10 @@ export function upstreamFailure(caught: unknown, fallbackCode: string) {
   const failure = caught instanceof UpstreamError
     ? caught
     : new UpstreamError(fallbackCode, 504);
-  console.error(JSON.stringify({ message: 'tdata request failed', code: failure.code }));
+  console.error(JSON.stringify({
+    message: 'tdata request failed',
+    code: failure.code,
+    ...failure.details,
+  }));
   return error(failure.code, failure.status);
 }
