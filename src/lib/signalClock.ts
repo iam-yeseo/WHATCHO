@@ -5,6 +5,10 @@ export interface SignalSnapshot {
   receivedAt: number;
 }
 
+export const formatRemainingSeconds = (value: number | null | undefined) => value == null
+  ? '—'
+  : String(Math.floor(Math.max(0, value)));
+
 const tick = (timing: SignalTiming | undefined, elapsedSeconds: number) => {
   if (!timing || timing.remainingSeconds == null) return timing;
   const remainingSeconds = Math.max(0, timing.remainingSeconds - elapsedSeconds);

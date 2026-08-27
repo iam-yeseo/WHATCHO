@@ -1,5 +1,7 @@
 import { directionName, relativeDirection } from '../lib/compass';
+import { formatRemainingSeconds } from '../lib/signalClock';
 import type { ApproachDirection, SignalColor, SignalTiming } from '../types';
+import { TrafficLight } from './TrafficLight';
 
 export type TravelMode = 'walk' | 'drive';
 
@@ -20,7 +22,7 @@ const stateName: Record<SignalColor, string> = {
 
 const remaining = (timing?: SignalTiming) => timing?.remainingSeconds == null
   ? '—'
-  : `${Math.ceil(timing.remainingSeconds)}초`;
+  : `${formatRemainingSeconds(timing.remainingSeconds)}초`;
 
 export function IntersectionGuide({ approach, left, mode, onModeChange, straight }: Props) {
   const ahead = directionName[relativeDirection(approach, 'straight')];
@@ -59,12 +61,12 @@ export function IntersectionGuide({ approach, left, mode, onModeChange, straight
       <div className="map-direction turn-right"><b>↱ 우회전</b><span>{rightward}</span></div>
 
       <div className={`map-signal straight ${straight.state.toLowerCase()}`}>
-        <i aria-hidden="true" />
-        <span><b>직진 {stateName[straight.state]}</b><small>{remaining(straight)}</small></span>
+        <TrafficLight state={straight.state} />
+        <div className="map-signal-copy"><b>직진 {stateName[straight.state]}</b><small>{remaining(straight)}</small></div>
       </div>
       <div className={`map-signal left ${left?.state.toLowerCase() ?? 'unknown'}`}>
-        <i aria-hidden="true" />
-        <span><b>좌회전 {left ? stateName[left.state] : '정보 없음'}</b><small>{remaining(left)}</small></span>
+        <TrafficLight state={left?.state ?? 'UNKNOWN'} />
+        <div className="map-signal-copy"><b>좌회전 {left ? stateName[left.state] : '정보 없음'}</b><small>{remaining(left)}</small></div>
       </div>
       <div className="you-marker" aria-hidden="true"><i>{mode === 'walk' ? '●' : '◆'}</i><b>나</b><span>↑</span></div>
     </div>

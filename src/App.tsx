@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { IntersectionGuide, type TravelMode } from './components/IntersectionGuide';
+import { TrafficLight } from './components/TrafficLight';
 import { usePosition } from './hooks/usePosition';
 import { mockIntersections, mockSignal } from './mock';
 import { directionName, stabilizeDirection } from './lib/compass';
@@ -7,13 +8,12 @@ import { nearbyIntersections, normalizeDirection, selectNextIntersection } from 
 import { calculateGlosaAdvice } from './lib/glosa';
 import {
   countdownSignal,
+  formatRemainingSeconds,
   nextSignalSyncDelay,
   type SignalSnapshot,
 } from './lib/signalClock';
 import type { ApiSignalResponse, ApproachDirection, Intersection, SignalTiming } from './types';
 import './styles.css';
-
-const fmt = (value: number | null | undefined) => value == null ? '—' : value.toFixed(1);
 
 function useCountdown(snapshot: SignalSnapshot | null) {
   const [now, setNow] = useState(Date.now);
@@ -383,8 +383,11 @@ export default function App() {
     </section>
 
     <section className={`signal ${mainSignal.state.toLowerCase()} ${stale ? 'stale' : ''}`}>
-      <div className="state"><i />{mainSignal.state}</div>
-      <div className="count">{fmt(mainSignal.remainingSeconds)}</div>
+      <div className="signal-heading">
+        <TrafficLight className="main-light" state={mainSignal.state} />
+        <div className="state">{mainSignal.state}</div>
+      </div>
+      <div className="count">{formatRemainingSeconds(mainSignal.remainingSeconds)}</div>
       <div className="seconds">SECONDS</div>
       <div
         className="signal-progress"
@@ -399,7 +402,7 @@ export default function App() {
 
     <section className="secondary">
       <div><span>↰ 좌회전</span><strong>{signal?.signal.left?.state ?? '정보 없음'}</strong></div>
-      <div><span>남은 시간</span><strong>{fmt(signal?.signal.left?.remainingSeconds)}초</strong></div>
+      <div><span>남은 시간</span><strong>{formatRemainingSeconds(signal?.signal.left?.remainingSeconds)}초</strong></div>
     </section>
 
     {travelMode === 'drive' && <section className={`glosa ${glosa.tone}`}>
