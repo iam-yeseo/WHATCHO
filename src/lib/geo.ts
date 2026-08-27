@@ -1,0 +1,8 @@
+import type { ApproachDirection, Intersection, SelectedIntersection, UserPosition } from '../types';
+const R=6371000, rad=(v:number)=>v*Math.PI/180;
+export function distanceMeters(a:{latitude:number;longitude:number},b:{latitude:number;longitude:number}){const p1=rad(a.latitude),p2=rad(b.latitude),dp=rad(b.latitude-a.latitude),dl=rad(b.longitude-a.longitude);const h=Math.sin(dp/2)**2+Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2;return 2*R*Math.asin(Math.sqrt(h));}
+export function bearing(a:{latitude:number;longitude:number},b:{latitude:number;longitude:number}){const p1=rad(a.latitude),p2=rad(b.latitude),dl=rad(b.longitude-a.longitude);return(Math.atan2(Math.sin(dl)*Math.cos(p2),Math.cos(p1)*Math.sin(p2)-Math.sin(p1)*Math.cos(p2)*Math.cos(dl))*180/Math.PI+360)%360;}
+export const angleDifference=(a:number,b:number)=>Math.abs(((a-b+540)%360)-180);
+export function normalizeDirection(deg:number|null):ApproachDirection{if(deg==null||!Number.isFinite(deg))return'UNKNOWN';return(['N','NE','E','SE','S','SW','W','NW'] as const)[Math.round(((deg%360)+360)%360/45)%8];}
+export function getApproachDirection(travelBearing:number|null):ApproachDirection{return normalizeDirection(travelBearing);}
+export function selectNextIntersection(position:UserPosition,items:Intersection[],maxDistance=1500):SelectedIntersection|null{const candidates=items.map(i=>({...i,distanceMeters:distanceMeters(position,i),bearing:bearing(position,i),approach:getApproachDirection(position.heading)})).filter(i=>i.distanceMeters<=maxDistance);const forward=position.heading==null?candidates:candidates.filter(i=>angleDifference(position.heading!,i.bearing)<=45);return(forward.length?forward:candidates).sort((a,b)=>a.distanceMeters-b.distanceMeters)[0]??null;}

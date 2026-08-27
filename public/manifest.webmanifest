@@ -1,0 +1,5 @@
+{
+  "name": "C-ITS Signal HUD", "short_name": "Signal HUD", "start_url": "/", "display": "standalone",
+  "background_color": "#080b0f", "theme_color": "#080b0f", "lang": "ko",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}
