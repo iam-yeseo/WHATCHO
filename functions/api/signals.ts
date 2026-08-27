@@ -107,7 +107,12 @@ export async function handleSignals(request: Request, env: Env): Promise<Respons
     url.searchParams.set('pageNo', '1');
     url.searchParams.set('numOfRows', '10');
     url.searchParams.set('itstId', id);
-    const raw = await fetchTData(url, env.TDATA_API_KEY, 'SIGNAL_DATA_UNAVAILABLE');
+    const raw = await fetchTData(
+      url,
+      env.TDATA_API_KEY,
+      'SIGNAL_DATA_UNAVAILABLE',
+      12_000,
+    );
     const signal = parseSignal(raw, id, approach);
     return signal ? json(signal) : error('SIGNAL_NOT_FOUND', 404);
   } catch (caught) {

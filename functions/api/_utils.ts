@@ -90,11 +90,12 @@ export async function fetchTData(
   url: URL,
   key: string,
   fallbackCode: string,
+  timeoutMs = 10_000,
 ): Promise<unknown> {
   url.searchParams.set('apiKey', key);
   url.searchParams.set('type', 'json');
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 4500);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const response = await fetch(url, {

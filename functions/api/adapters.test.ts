@@ -3,7 +3,10 @@ import { normalizeIntersection } from './intersections';
 import { parseSignal } from './signals';
 import { extractRows, extractTotalCount, fetchTData } from './_utils';
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
 
 describe('T-DATA adapters', () => {
   it('unwraps the standard response envelope', () => {
@@ -78,5 +81,26 @@ describe('T-DATA adapters', () => {
       code: 'UPSTREAM_AUTH_FAILED',
       details: { upstreamStatus: 404 },
     });
+  });
+
+  it('honors the configured upstream timeout', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('fetch', vi.fn((_input: RequestInfo | URL, init?: RequestInit) => (
+      new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => {
+          reject(new DOMException('Aborted', 'AbortError'));
+        });
+      })
+    )));
+
+    const timedOut = expect(fetchTData(
+      new URL('https://t-data.example.test/service'),
+      'hidden-value',
+      'DATA_UNAVAILABLE',
+      25,
+    )).rejects.toMatchObject({ code: 'UPSTREAM_TIMEOUT', status: 504 });
+
+    await vi.advanceTimersByTimeAsync(25);
+    await timedOut;
   });
 });
