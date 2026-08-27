@@ -11,7 +11,7 @@
 
 body {
   margin: 0;
-  min-width: 320px;
+  min-width: 0;
   min-height: 100vh;
   background: radial-gradient(circle at 50% 30%, #131b22, #080b0f 54%);
 }
@@ -127,6 +127,247 @@ header { display: flex; justify-content: space-between; }
 .intersection h1 { font-size: 24px; margin: 9px 0 5px; }
 .intersection strong { font-size: 15px; color: #aeb8c1; }
 .intersection small { margin-top: 9px; }
+
+.intersection-guide {
+  background: linear-gradient(145deg, #111820, #0b1015);
+  border: 1px solid #202b34;
+  border-radius: 22px;
+  padding: 15px;
+  overflow: hidden;
+}
+
+.guide-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 13px;
+}
+
+.guide-heading > div:first-child b { display: block; font-size: 14px; }
+.guide-heading > div:first-child small {
+  display: block;
+  margin-top: 4px;
+  color: #6f7c87;
+  font-size: 9px;
+}
+
+.mode-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 3px;
+  border: 1px solid #25313b;
+  border-radius: 10px;
+  background: #090d11;
+}
+
+.mode-switch button {
+  min-width: 48px;
+  padding: 7px 9px;
+  color: #6e7b86;
+  background: transparent;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.mode-switch button.active {
+  color: #07110c;
+  background: #29e78f;
+  box-shadow: 0 0 12px #29e78f4d;
+}
+
+.junction {
+  position: relative;
+  height: 310px;
+  overflow: hidden;
+  border: 1px solid #1c2730;
+  border-radius: 17px;
+  background:
+    radial-gradient(circle at 50% 48%, #19242c 0 17%, transparent 42%),
+    #0a0e12;
+  isolation: isolate;
+}
+
+.road {
+  position: absolute;
+  z-index: -2;
+  background: #1b232a;
+  box-shadow: inset 0 0 0 1px #26313a;
+}
+
+.road.vertical { top: 0; bottom: 0; left: calc(50% - 52px); width: 104px; }
+.road.horizontal { left: 0; right: 0; top: 103px; height: 104px; }
+
+.lane-line {
+  position: absolute;
+  z-index: -1;
+  opacity: .34;
+}
+
+.lane-line.vertical {
+  top: 0;
+  bottom: 0;
+  left: calc(50% - 1px);
+  width: 2px;
+  background: repeating-linear-gradient(to bottom, #d9c977 0 11px, transparent 11px 23px);
+}
+
+.lane-line.horizontal {
+  left: 0;
+  right: 0;
+  top: 154px;
+  height: 2px;
+  background: repeating-linear-gradient(to right, #d9c977 0 11px, transparent 11px 23px);
+}
+
+.crosswalk {
+  position: absolute;
+  left: calc(50% - 43px);
+  top: 121px;
+  width: 86px;
+  height: 69px;
+  display: grid;
+  align-content: space-between;
+  z-index: 0;
+  opacity: .78;
+}
+
+.crosswalk i { height: 6px; background: #d7dde1; border-radius: 1px; }
+.intersection-guide.walk .crosswalk i { background: #e8fff5; box-shadow: 0 0 8px #29e78f38; }
+
+.map-direction {
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  gap: 3px;
+  color: #e1e8ed;
+  font-size: 10px;
+  text-align: center;
+}
+
+.map-direction b { font-size: 11px; }
+.map-direction span { color: #82909b; font-size: 9px; }
+.map-direction.ahead { top: 9px; left: 50%; transform: translateX(-50%); }
+.map-direction.turn-left { top: 119px; left: 10px; text-align: left; }
+.map-direction.turn-right { top: 119px; right: 10px; text-align: right; }
+
+.map-signal {
+  --map-signal-color: #84919d;
+  position: absolute;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 104px;
+  padding: 8px 9px;
+  border: 1px solid #2a343d;
+  border-radius: 9px;
+  background: #090d11e8;
+  box-shadow: 0 7px 18px #0007;
+}
+
+.map-signal.green { --map-signal-color: #29e78f; }
+.map-signal.yellow { --map-signal-color: #ffc857; }
+.map-signal.red { --map-signal-color: #f05252; }
+.map-signal > i {
+  flex: 0 0 auto;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--map-signal-color);
+  box-shadow: 0 0 10px var(--map-signal-color);
+}
+
+.map-signal span { display: grid; gap: 2px; }
+.map-signal b { color: #ced7de; font-size: 9px; }
+.map-signal small { color: var(--map-signal-color); font-size: 10px; font-weight: 800; }
+.map-signal.straight { top: 50px; right: 9px; }
+.map-signal.left { left: 9px; bottom: 17px; }
+
+.you-marker {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: center;
+  gap: 3px 6px;
+  z-index: 2;
+  color: #29e78f;
+  text-align: center;
+  filter: drop-shadow(0 0 7px #29e78f80);
+}
+
+.you-marker i {
+  grid-row: 1 / 3;
+  display: grid;
+  place-items: center;
+  width: 25px;
+  height: 25px;
+  border: 2px solid #29e78f;
+  border-radius: 50%;
+  color: #29e78f;
+  background: #0d241a;
+  font-size: 8px;
+  font-style: normal;
+}
+
+.you-marker b { font-size: 10px; line-height: 1; }
+.you-marker span { font-size: 15px; line-height: .8; }
+
+.guide-route {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr 1fr;
+  gap: 5px;
+  margin-top: 9px;
+  text-align: center;
+}
+
+.guide-route > * {
+  overflow: hidden;
+  padding: 8px 4px;
+  border: 1px solid #222d36;
+  border-radius: 8px;
+  color: #7e8b96;
+  background: #0b1015;
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.guide-route b { color: #29e78f; border-color: #29e78f4d; background: #102019; }
+
+.pedestrian-reference {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 11px;
+  align-items: start;
+  margin-top: 11px;
+  padding: 12px;
+  border: 1px solid #29e78f38;
+  border-radius: 12px;
+  background: #102019;
+}
+
+.walk-icon { font-size: 23px; line-height: 1; }
+.pedestrian-reference b { display: block; color: #d9eee4; font-size: 11px; }
+.pedestrian-reference p,
+.right-turn-note {
+  margin: 5px 0 0;
+  color: #84938c;
+  font-size: 9px;
+  line-height: 1.55;
+}
+
+.pedestrian-reference strong { color: #29e78f; }
+.right-turn-note {
+  margin-top: 11px;
+  padding: 10px 11px;
+  border-radius: 10px;
+  background: #0b1015;
+  color: #7d8993;
+}
 
 .nearby {
   background: #0d1217;
@@ -266,6 +507,7 @@ header { display: flex; justify-content: space-between; }
 }
 
 .lane b { color: #ffc857; margin-left: 12px; }
+.lane span { color: #29e78f; margin-left: 8px; font-size: 10px; }
 .stale { opacity: .65; }
 
 .secondary {

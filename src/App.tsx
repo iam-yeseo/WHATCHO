@@ -1,42 +1,46 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { IntersectionGuide, type TravelMode } from './components/IntersectionGuide';
 import { usePosition } from './hooks/usePosition';
 import { mockIntersections, mockSignal } from './mock';
+import { directionName, stabilizeDirection } from './lib/compass';
 import { nearbyIntersections, normalizeDirection, selectNextIntersection } from './lib/geo';
 import { calculateGlosaAdvice } from './lib/glosa';
-import type { ApiSignalResponse, Intersection, SignalTiming } from './types';
+import {
+  countdownSignal,
+  nextSignalSyncDelay,
+  type SignalSnapshot,
+} from './lib/signalClock';
+import type { ApiSignalResponse, ApproachDirection, Intersection, SignalTiming } from './types';
 import './styles.css';
 
 const fmt = (value: number | null | undefined) => value == null ? '—' : value.toFixed(1);
-const directionName: Record<string, string> = {
-  N: '북', NE: '북동', E: '동', SE: '남동',
-  S: '남', SW: '남서', W: '서', NW: '북서', UNKNOWN: '확인 중',
-};
 
-function useCountdown(signal: ApiSignalResponse | null) {
-  const [elapsed, setElapsed] = useState(0);
+function useCountdown(snapshot: SignalSnapshot | null) {
+  const [now, setNow] = useState(Date.now);
 
   useEffect(() => {
-    setElapsed(0);
-    if (!signal) return;
-    const start = performance.now();
-    const id = setInterval(() => setElapsed((performance.now() - start) / 1000), 100);
-    return () => clearInterval(id);
-  }, [signal]);
+    setNow(Date.now());
+    if (!snapshot) return;
+    const update = () => setNow(Date.now());
+    const id = setInterval(update, 200);
+    document.addEventListener('visibilitychange', update);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', update);
+    };
+  }, [snapshot]);
 
-  const tick = (value?: SignalTiming) => value ? {
-    ...value,
-    remainingSeconds: value.remainingSeconds == null
-      ? null
-      : Math.max(0, value.remainingSeconds - elapsed),
-  } : undefined;
+  return countdownSignal(snapshot, now);
+}
 
-  return signal ? {
-    ...signal,
-    signal: {
-      straight: tick(signal.signal.straight)!,
-      left: tick(signal.signal.left),
-    },
-  } : null;
+function useStableApproach(heading: number | null | undefined) {
+  const [approach, setApproach] = useState<ApproachDirection>('UNKNOWN');
+
+  useEffect(() => {
+    setApproach((current) => stabilizeDirection(current, heading ?? null));
+  }, [heading]);
+
+  return approach;
 }
 
 function useSignalProgress(
@@ -70,11 +74,18 @@ export default function App() {
     localStorage.testMode === 'true'
   ));
   const { position, state: gps } = usePosition(mock);
+  const approach = useStableApproach(position?.heading);
   const [intersections, setIntersections] = useState<Intersection[]>(mock ? mockIntersections : []);
-  const [rawSignal, setSignal] = useState<ApiSignalResponse | null>(mock ? mockSignal() : null);
+  const [signalSnapshot, setSignalSnapshot] = useState<SignalSnapshot | null>(() => mock ? {
+    data: mockSignal(),
+    receivedAt: Date.now(),
+  } : null);
   const [api, setApi] = useState<'idle' | 'loading' | 'ok' | 'error' | 'offline'>(mock ? 'ok' : 'idle');
   const [developer, setDeveloper] = useState(localStorage.devMode === 'true');
   const [notice, setNotice] = useState(localStorage.safetyAccepted !== 'true');
+  const [travelMode, setTravelMode] = useState<TravelMode>(() => (
+    localStorage.travelMode === 'drive' ? 'drive' : 'walk'
+  ));
   const [manualIntersectionId, setManualIntersectionId] = useState<string | null>(null);
   const lastIntersectionQuery = useRef<{
     latitude: number;
@@ -100,7 +111,7 @@ export default function App() {
     lastIntersectionQuery.current = null;
     setManualIntersectionId(null);
     setIntersections(mock ? mockIntersections : []);
-    setSignal(mock ? mockSignal() : null);
+    setSignalSnapshot(mock ? { data: mockSignal(), receivedAt: Date.now() } : null);
     setApi(mock ? 'ok' : navigator.onLine ? 'idle' : 'offline');
   }, [mock]);
 
@@ -115,9 +126,16 @@ export default function App() {
     return [...closest.slice(0, 3), automaticSelected]
       .sort((a, b) => a.distanceMeters - b.distanceMeters);
   }, [position, intersections, automaticSelected]);
-  const selected = useMemo(
+  const selectedBase = useMemo(
     () => nearby.find((item) => item.id === manualIntersectionId) ?? automaticSelected,
     [nearby, manualIntersectionId, automaticSelected],
+  );
+  const selected = useMemo(
+    () => selectedBase ? {
+      ...selectedBase,
+      approach: approach === 'UNKNOWN' ? normalizeDirection(selectedBase.bearing) : approach,
+    } : null,
+    [selectedBase, approach],
   );
 
   useEffect(() => {
@@ -126,10 +144,15 @@ export default function App() {
     }
   }, [manualIntersectionId, nearby]);
 
-  const activeRawSignal = rawSignal?.intersectionId === selected?.id ? rawSignal : null;
-  const signal = useCountdown(activeRawSignal);
-  const stale = activeRawSignal
-    ? Date.now() - Date.parse(activeRawSignal.timestamp) > 20_000
+  const activeSnapshot = signalSnapshot && selected &&
+    signalSnapshot.data.intersectionId === selected.id &&
+    (!signalSnapshot.data.approach || signalSnapshot.data.approach === selected.approach)
+      ? signalSnapshot
+      : null;
+  const activeRawSignal = activeSnapshot?.data ?? null;
+  const signal = useCountdown(activeSnapshot);
+  const stale = activeSnapshot
+    ? Date.now() - activeSnapshot.receivedAt > 90_000
     : false;
   const mainSignal = signal?.signal.straight ?? { state: 'UNKNOWN', remainingSeconds: null };
   const signalProgress = useSignalProgress(
@@ -186,9 +209,11 @@ export default function App() {
   }, [mock, position]);
 
   const loadSignal = useCallback(async () => {
-    if (mock || !selected) return;
-    const key = `${selected.id}:${selected.approach}`;
-    if (signalRequest.current?.key === key) return;
+    const intersectionId = selected?.id;
+    const selectedApproach = selected?.approach;
+    if (mock || !intersectionId || !selectedApproach) return null;
+    const key = `${intersectionId}:${selectedApproach}`;
+    if (signalRequest.current?.key === key) return null;
 
     signalRequest.current?.controller.abort();
     const controller = new AbortController();
@@ -196,44 +221,63 @@ export default function App() {
     try {
       setApi('loading');
       const response = await fetch(
-        `/api/signals?intersectionId=${encodeURIComponent(selected.id)}&approach=${selected.approach}`,
+        `/api/signals?intersectionId=${encodeURIComponent(intersectionId)}&approach=${selectedApproach}`,
         { signal: controller.signal },
       );
       if (!response.ok) throw new Error();
-      setSignal(await response.json() as ApiSignalResponse);
+      const data = await response.json() as ApiSignalResponse;
+      setSignalSnapshot({ data, receivedAt: Date.now() });
       setApi('ok');
+      return data;
     } catch (caught) {
-      if (caught instanceof DOMException && caught.name === 'AbortError') return;
+      if (caught instanceof DOMException && caught.name === 'AbortError') return null;
       setApi(navigator.onLine ? 'error' : 'offline');
+      return null;
     } finally {
       if (signalRequest.current?.controller === controller) signalRequest.current = null;
     }
-  }, [mock, selected]);
+  }, [mock, selected?.id, selected?.approach]);
 
   useEffect(() => {
     loadIntersections();
   }, [loadIntersections]);
 
   useEffect(() => {
-    if (!mock) setSignal(null);
+    if (!mock) setSignalSnapshot(null);
   }, [mock, selected?.id, selected?.approach]);
 
   useEffect(() => {
-    loadSignal();
-    const id = setInterval(
-      loadSignal,
-      selected && selected.distanceMeters < 500 ? 10_000 : 15_000,
-    );
-    return () => clearInterval(id);
-  }, [loadSignal, selected?.distanceMeters]);
+    if (mock || !selected) return;
+    let cancelled = false;
+    let timer: number | undefined;
+
+    const synchronize = async () => {
+      const data = await loadSignal();
+      if (cancelled) return;
+      timer = window.setTimeout(
+        synchronize,
+        data ? nextSignalSyncDelay(data) : 15_000,
+      );
+    };
+
+    void synchronize();
+    return () => {
+      cancelled = true;
+      if (timer != null) clearTimeout(timer);
+    };
+  }, [loadSignal, mock, selected?.id, selected?.approach]);
 
   useEffect(() => {
     const online = () => {
       setApi('idle');
-      loadSignal();
+      void loadSignal();
     };
     const offline = () => setApi('offline');
-    const visible = () => document.visibilityState === 'visible' && loadSignal();
+    const visible = () => {
+      if (document.visibilityState !== 'visible') return;
+      const age = activeSnapshot ? Date.now() - activeSnapshot.receivedAt : Number.POSITIVE_INFINITY;
+      if (age >= 15_000) void loadSignal();
+    };
     addEventListener('online', online);
     addEventListener('offline', offline);
     document.addEventListener('visibilitychange', visible);
@@ -242,20 +286,23 @@ export default function App() {
       removeEventListener('offline', offline);
       document.removeEventListener('visibilitychange', visible);
     };
-  }, [loadSignal]);
+  }, [activeSnapshot, loadSignal]);
 
   useEffect(() => () => signalRequest.current?.controller.abort(), []);
 
   useEffect(() => {
     if (!mock || !selected) return;
-    setSignal(mockSignal(selected.id));
-    const id = setTimeout(() => setSignal({
-      ...mockSignal(selected.id),
-      signal: {
-        straight: { state: 'RED', remainingSeconds: 32.7 },
-        left: { state: 'GREEN', remainingSeconds: 16.4 },
+    setSignalSnapshot({ data: mockSignal(selected.id), receivedAt: Date.now() });
+    const id = setTimeout(() => setSignalSnapshot({
+      data: {
+        ...mockSignal(selected.id),
+        signal: {
+          straight: { state: 'RED', remainingSeconds: 32.7 },
+          left: { state: 'GREEN', remainingSeconds: 16.4 },
+        },
+        timestamp: new Date().toISOString(),
       },
-      timestamp: new Date().toISOString(),
+      receivedAt: Date.now(),
     }), 23_700);
     return () => clearTimeout(id);
   }, [mock, selected?.id]);
@@ -265,8 +312,8 @@ export default function App() {
     : gps === 'denied' ? 'GPS 권한 거부'
       : gps === 'requesting' ? 'GPS 요청 중' : 'GPS 확인 불가';
   const apiLabel = mock ? 'DEMO DATA'
-    : api === 'ok' ? 'C-ITS 연결'
-    : api === 'loading' ? '동기화 중'
+    : api === 'ok' ? activeSnapshot ? '로컬 카운트' : 'C-ITS 연결'
+    : api === 'loading' ? 'C-ITS 동기화'
       : api === 'offline' ? '오프라인'
         : api === 'error' ? 'API 오류' : '연결 대기';
 
@@ -295,8 +342,22 @@ export default function App() {
             : intersections.length ? '교차로 검색 중' : '주변 교차로 확인 중'
       )}</h1>
       <strong>{selected ? `${Math.round(selected.distanceMeters)} m` : '—'}</strong>
-      <small>진행 방향 · {directionName[normalizeDirection(position?.heading ?? null)]}</small>
+      <small>
+        진행 방향 · {directionName[selected?.approach ?? approach]}
+        {approach === 'UNKNOWN' && selected && ' (교차로 기준 추정)'}
+      </small>
     </section>
+
+    <IntersectionGuide
+      approach={selected?.approach ?? approach}
+      straight={mainSignal}
+      left={signal?.signal.left}
+      mode={travelMode}
+      onModeChange={(mode) => {
+        setTravelMode(mode);
+        localStorage.travelMode = mode;
+      }}
+    />
 
     <section className="nearby" aria-label="주변 교차로 선택">
       <div className="nearby-heading">
@@ -310,7 +371,7 @@ export default function App() {
           className={selected?.id === item.id ? 'selected' : ''}
           aria-pressed={selected?.id === item.id}
           onClick={() => {
-            setSignal(null);
+            setSignalSnapshot(null);
             setManualIntersectionId(item.id);
           }}
         >
@@ -333,7 +394,7 @@ export default function App() {
         aria-valuemax={100}
         aria-valuenow={Math.round(signalProgress)}
       ><i style={{ width: `${signalProgress}%` }} /></div>
-      <div className="lane">↑ 직진 신호 {stale && <b>오래된 데이터</b>}</div>
+      <div className="lane">↑ 차량 직진 신호 {travelMode === 'walk' && <span>보행 연계 참고</span>} {stale && <b>오래된 데이터</b>}</div>
     </section>
 
     <section className="secondary">
@@ -341,17 +402,17 @@ export default function App() {
       <div><span>남은 시간</span><strong>{fmt(signal?.signal.left?.remainingSeconds)}초</strong></div>
     </section>
 
-    <section className={`glosa ${glosa.tone}`}>
+    {travelMode === 'drive' && <section className={`glosa ${glosa.tone}`}>
       <div className="glosa-heading"><span>GLOSA</span><small>신호 연동 속도 안내</small></div>
       <div className="glosa-body">
         <strong>{glosa.recommendedSpeedKph ?? '—'}{glosa.recommendedSpeedKph != null && <small>km/h</small>}</strong>
         <div><b>{glosa.label}</b><p>{glosa.message}</p></div>
       </div>
-    </section>
+    </section>}
 
     <footer>
       <div><span>현재 속도</span><strong>{position?.speed == null ? '—' : Math.round(position.speed * 3.6)} <small>km/h</small></strong></div>
-      <div><span>최근 업데이트</span><strong>{activeRawSignal ? new Date(activeRawSignal.timestamp).toLocaleTimeString('ko-KR', { hour12: false }) : '—'}</strong></div>
+      <div><span>최근 동기화</span><strong>{activeSnapshot ? new Date(activeSnapshot.receivedAt).toLocaleTimeString('ko-KR', { hour12: false }) : '—'}</strong></div>
       <button type="button" onClick={() => {
         const value = !developer;
         setDeveloper(value);
@@ -367,6 +428,7 @@ export default function App() {
       api,
       endpoint: '/api',
       parsedSignal: activeRawSignal,
+      receivedAt: activeSnapshot?.receivedAt,
       signalProgress,
       glosa,
     }, null, 2)}</pre>}
