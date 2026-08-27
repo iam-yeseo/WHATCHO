@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { countdownSignal, nextSignalSyncDelay } from './signalClock';
+import { countdownSignal, formatRemainingSeconds, nextSignalSyncDelay } from './signalClock';
 
 const response = {
   intersectionId: '1',
@@ -11,6 +11,12 @@ const response = {
 };
 
 describe('signalClock', () => {
+  it('drops fractional seconds for display', () => {
+    expect(formatRemainingSeconds(12.9)).toBe('12');
+    expect(formatRemainingSeconds(0.9)).toBe('0');
+    expect(formatRemainingSeconds(null)).toBe('—');
+  });
+
   it('counts down from the client receipt time', () => {
     const signal = countdownSignal({ data: response, receivedAt: 10_000 }, 12_500);
     expect(signal?.signal.straight.remainingSeconds).toBe(40);
