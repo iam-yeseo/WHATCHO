@@ -1,7 +1,8 @@
 {
   "compilerOptions": {
     "target": "ES2022", "lib": ["ES2022", "WebWorker"], "module": "ESNext", "moduleResolution": "Bundler",
-    "strict": true, "skipLibCheck": true, "noEmit": true
+    "strict": true, "skipLibCheck": true, "noEmit": true,
+    "types": ["./worker-configuration.d.ts"]
   },
-  "include": ["functions", "shared"]
+  "include": ["functions", "worker", "src/lib/geo.ts", "src/types.ts"]
 }

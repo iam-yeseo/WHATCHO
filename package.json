@@ -5,21 +5,27 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "dev:worker": "npm run build && wrangler dev",
+    "types": "wrangler types",
+    "build": "npm run types && tsc -b && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "check": "tsc -b --pretty false"
+    "check": "npm run types && tsc -b --pretty false",
+    "deploy": "npm run build && wrangler deploy",
+    "deploy:cloudflare": "node scripts/cloudflare-deploy.mjs"
   },
   "dependencies": {
     "react": "19.1.1",
     "react-dom": "19.1.1"
   },
   "devDependencies": {
+    "@types/node": "^26.4.0",
     "@types/react": "19.1.12",
     "@types/react-dom": "19.1.9",
     "@vitejs/plugin-react": "5.0.2",
     "typescript": "5.9.2",
-    "vite": "7.1.4",
-    "vitest": "3.2.4"
+    "vite": "^7.3.6",
+    "vitest": "^3.2.7",
+    "wrangler": "^4.126.0"
   }
 }

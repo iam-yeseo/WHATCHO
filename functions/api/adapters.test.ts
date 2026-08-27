@@ -1,0 +1,64 @@
+import { describe, expect, it } from 'vitest';
+import { normalizeIntersection } from './intersections';
+import { parseSignal } from './signals';
+import { extractRows, extractTotalCount } from './_utils';
+
+describe('T-DATA adapters', () => {
+  it('unwraps the standard response envelope', () => {
+    const payload = {
+      response: {
+        body: {
+          totalCount: 2,
+          items: { item: [{ itstId: '1' }, { itstId: '2' }] },
+        },
+      },
+    };
+    expect(extractRows(payload)).toHaveLength(2);
+    expect(extractTotalCount(payload)).toBe(2);
+  });
+
+  it('normalizes official crossroad map fields', () => {
+    expect(normalizeIntersection({
+      itstId: '77',
+      itstNm: '롯데백화점도곡',
+      mapCtptIntLat: '37.968756',
+      mapCtptIntLot: '127.547359',
+    })).toEqual({
+      id: '77',
+      name: '롯데백화점도곡',
+      latitude: 37.968756,
+      longitude: 127.547359,
+    });
+  });
+
+  it('selects the requested approach and converts tenths of a second', () => {
+    const timestamp = 1_724_900_000_000;
+    const signal = parseSignal({
+      response: {
+        body: {
+          items: {
+            item: [{
+              itstId: '1537',
+              itstNm: '테스트 교차로',
+              etStsgStatNm: 'protected-Movement-Allowed',
+              etStsgRmdrCs: 125,
+              etLtsgStatNm: 'stop-And-Remain',
+              etLtsgRmdrCs: 87,
+              ntStsgStatNm: 'stop-And-Remain',
+              trsmUtcTime: timestamp,
+            }],
+          },
+        },
+      },
+    }, '1537', 'E');
+
+    expect(signal?.signal.straight).toEqual({ state: 'GREEN', remainingSeconds: 12.5 });
+    expect(signal?.signal.left).toEqual({ state: 'RED', remainingSeconds: 8.7 });
+    expect(signal?.timestamp).toBe(new Date(timestamp).toISOString());
+  });
+
+  it('does not guess a signal direction when heading is unknown', () => {
+    const signal = parseSignal({ items: [{ itstId: '1537', ntStsgRmdrCs: 50 }] }, '1537', 'UNKNOWN');
+    expect(signal?.signal.straight).toEqual({ state: 'UNKNOWN', remainingSeconds: null });
+  });
+});

@@ -5,18 +5,19 @@
 ## 기술 스택과 구조
 
 - React + TypeScript + Vite (모바일 UI/PWA)
-- Cloudflare Pages Functions (`functions/api`) — T-DATA 요청 프록시, 정규화, 오류 은닉
+- Cloudflare Worker + Static Assets — T-DATA 요청 프록시, 정규화, 오류 은닉
 - Vitest — 위치·방향 알고리즘 테스트
 
 ```text
 src/                    UI, GPS, 교차로 선택, 로컬 카운트다운
 src/lib/geo.ts          Haversine, bearing, 전방 ±45° 필터
 src/lib/direction.ts    접근 방향 및 방향별 신호 선택 경계
-functions/api/          Cloudflare 전용 API proxy
+worker/index.ts         `/api/*` Worker 라우터와 정적 앱 fallback
+functions/api/          T-DATA API adapter와 응답 정규화
 public/                 PWA manifest/icon (신호 API 캐시는 사용하지 않음)
 ```
 
-브라우저는 `/api/intersections`와 `/api/signals`만 호출합니다. 인증키는 Pages Function에서만 읽으며 원본 오류 및 원본 응답 전체는 클라이언트에 전달하지 않습니다.
+브라우저는 `/api/intersections`와 `/api/signals`만 호출합니다. 인증키는 Worker Secret에서만 읽으며 원본 오류 및 원본 응답 전체는 클라이언트에 전달하지 않습니다.
 
 ## 설치 및 로컬 실행
 
@@ -25,34 +26,36 @@ Node.js 20 이상에서:
 ```bash
 npm install
 cp .dev.vars.example .dev.vars
-npm run dev
+npm run dev:worker
 ```
 
-Functions까지 로컬에서 실행하려면 Wrangler를 사용합니다.
+UI만 빠르게 확인하려면 `npm run dev`를 사용하고 `?mock=true`로 접속합니다.
 
 ```bash
-npm run build
-npx wrangler pages dev dist
+npm run dev
 ```
 
 `.dev.vars`에 개발용 값을 입력하되 **커밋하지 마십시오**. `.dev.vars.example`에는 빈 변수명만 들어 있습니다.
 
-## Cloudflare Pages 배포
+## Cloudflare Workers 배포
 
-1. GitHub 저장소를 Cloudflare Dashboard의 **Workers & Pages → Create → Pages → Connect to Git**에 연결합니다.
-2. Build command는 `npm run build`, output directory는 `dist`로 지정합니다.
-3. Pages 프로젝트의 **Settings → Variables and Secrets**에서 아래 변수를 등록합니다.
-   - `TDATA_API_KEY`: Secret으로 등록한 발급 인증키
-   - `TDATA_SIGNAL_API_URL`: 공식 문서에서 확인한 신호 잔여시간 API URL
-   - `TDATA_INTERSECTION_API_URL`: 공식 문서에서 확인한 교차로 MAP/검색 API URL
-4. Production/Preview 환경을 구분해 설정하고 재배포합니다.
-5. `/api/status`에서 `configured: true`를 확인합니다. 이 응답은 키 값 자체를 반환하지 않습니다.
+1. Worker 프로젝트 이름은 `whatcho`, Build command는 `npm run build`, Deploy command는 `npm run deploy:cloudflare`를 사용합니다.
+2. Cloudflare Builds의 **Variables and secrets**에서 `TDATA_API_KEY`를 Secret으로 등록합니다. 배포 스크립트가 이 값을 로그에 출력하지 않고 Worker Runtime Secret으로 함께 업로드하며, 임시 파일은 즉시 삭제합니다.
+3. 신호 잔여시간·교차로 MAP 공식 URL은 비밀값이 아니므로 `wrangler.jsonc`의 `vars`에서 관리합니다.
+4. 배포 후 `/api/status`에서 `configured: true`를 확인합니다. 이 응답은 키 값 자체를 반환하지 않습니다.
+
+CLI에서는 API 키를 명령행 인자로 남기지 말고 다음 대화형 명령으로 입력합니다.
+
+```bash
+npx wrangler secret put TDATA_API_KEY
+npm run deploy
+```
 
 > **실제 API Key를 GitHub, README, frontend, `public`, 커밋된 `.env`에 절대 올리지 마십시오.** 유출 시 즉시 키를 폐기·재발급하고 Git 기록에서도 제거해야 합니다.
 
 ### 실제 API 스키마 연결
 
-T-DATA 상품/승인 유형에 따라 URL, 인증 파라미터 및 응답 envelope가 다를 수 있어 URL을 환경변수로 분리했습니다. `functions/api/signals.ts`의 `parseSignal`은 adapter 경계이며 문서/실제 샘플 응답을 확인한 뒤 필드 alias와 방향 코드를 이곳에서 확정하십시오. 현재는 요청서에 제시된 `ntStsgStatNm`, `ntStsgRmdrCs`, `ntLtsgStatNm`, `ntLtsgRmdrCs`를 포함한 안전한 alias를 지원하고 잔여 `cs`를 10으로 나눕니다. 공식 인증 파라미터가 `apiKey`와 다르면 `_utils.ts`의 서버 측 요청만 수정합니다.
+공식 T-DATA의 `v2xCrossroadMapInformation/1.0`과 `v2xSignalPhaseTimingFusionInformation/1.0`을 사용합니다. 교차로 목록은 서버에서 정규화·캐시한 뒤 현재 위치 반경으로 필터링합니다. 신호는 진행 방향을 북·북동·동·남동·남·남서·서·북서 필드에 대응시키고 잔여 `RmdrCs` 값을 10으로 나눠 초 단위로 변환합니다.
 
 ## 사용법
 
@@ -73,7 +76,7 @@ T-DATA 상품/승인 유형에 따라 URL, 인증 파라미터 및 응답 envelo
 
 ## 알려진 한계
 
-- 실제 T-DATA 응답 샘플과 상품별 공식 문서를 저장소에 제공하지 않았으므로 운영 전 adapter의 envelope, 인증 파라미터, 교차로 좌표 및 방향 코드 매핑 검증이 필요합니다. 임의 방향 코드로 확정하지 않았습니다.
+- 승인된 T-DATA API 키의 실제 운영 응답은 배포 후 `/api/intersections`와 `/api/signals`에서 최종 확인해야 합니다.
 - 브라우저 GPS heading 품질은 기기/속도/권한에 따라 다르며 차선 수준 위치를 보장하지 않습니다.
 - Mock 신호는 녹색 카운트다운 뒤 적색으로 한 차례 전환하며, 반복 신호 주기 및 실제 GLOSA는 후속 범위입니다.
 - SVG 아이콘을 제공하지만 플랫폼별 PNG 아이콘은 후속 polish 대상입니다.
