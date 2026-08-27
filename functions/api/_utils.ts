@@ -101,9 +101,7 @@ export async function fetchTData(
       headers: { accept: 'application/json' },
       signal: controller.signal,
     });
-    const gatewayError = response.headers.get('x-gateway-error') ?? '';
-    const unknownClient = response.status === 404 && /No client found for API Key/i.test(gatewayError);
-    if (response.status === 401 || response.status === 403 || unknownClient) {
+    if ([401, 403, 404].includes(response.status)) {
       throw new UpstreamError('UPSTREAM_AUTH_FAILED', 502, {
         upstreamStatus: response.status,
       });

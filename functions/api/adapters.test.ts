@@ -67,10 +67,7 @@ describe('T-DATA adapters', () => {
   it('maps T-DATA unknown-client 404 responses to an auth failure without exposing the key', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(
       JSON.stringify({ responseCode: 404 }),
-      {
-        status: 404,
-        headers: { 'x-gateway-error': 'No client found for API Key hidden-value' },
-      },
+      { status: 404 },
     )));
 
     await expect(fetchTData(
